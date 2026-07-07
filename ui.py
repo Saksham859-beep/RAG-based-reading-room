@@ -17,7 +17,10 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 load_dotenv()
-
+import os
+if "MISTRAL_API_KEY" in st.secrets:
+    os.environ["MISTRAL_API_KEY"] = st.secrets["MISTRAL_API_KEY"]
+ 
 PERSIST_DIR = "chroma-data-Hub-book"
 HERO_IMG = "https://images.unsplash.com/photo-1481627834876-b7833e8f5570?fm=jpg&q=80&w=1000&auto=format&fit=crop"
 SPINE_COLORS = ["#1F6F6B", "#7B3F61", "#C9A227", "#3C5A8A", "#A15843", "#4B7A5A"]
