@@ -1,0 +1,42 @@
+langchain
+langchain-core
+langchain-community
+langchain-text-splitters
+# LLM Providers
+langchain-openai
+langchain-mistralai
+openai
+mistralai
+# Optional HuggingFace embeddings
+langchain-huggingface
+transformers
+torch
+# Vector Database
+chromadb
+
+# Embedding Models
+sentence-transformers
+
+# Document Loaders
+pypdf
+beautifulsoup4
+lxml
+
+# Text Processing
+tiktoken
+
+# Environment Variables
+python-dotenv
+
+# Data Handling
+pandas
+numpy
+
+# API / App Layer
+fastapi
+uvicorn
+streamlit
+
+# Utilities
+tqdm
+requests
