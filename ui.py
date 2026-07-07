@@ -6,6 +6,7 @@ book-themed UI with PDF / TXT upload support.
 """
 
 import time
+import uuid
 from pathlib import Path
 
 import streamlit as st
@@ -17,10 +18,13 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 load_dotenv()
+
+# --- Streamlit Cloud secrets support ---
+# Works locally via .env, and in the cloud via the app's Secrets panel.
 import os
 if "MISTRAL_API_KEY" in st.secrets:
     os.environ["MISTRAL_API_KEY"] = st.secrets["MISTRAL_API_KEY"]
- 
+
 PERSIST_DIR = "chroma-data-Hub-book"
 HERO_IMG = "https://images.unsplash.com/photo-1481627834876-b7833e8f5570?fm=jpg&q=80&w=1000&auto=format&fit=crop"
 SPINE_COLORS = ["#1F6F6B", "#7B3F61", "#C9A227", "#3C5A8A", "#A15843", "#4B7A5A"]
@@ -208,14 +212,23 @@ if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 if "library" not in st.session_state:
     st.session_state.library = []  # list of file names already ingested
+if "session_id" not in st.session_state:
+    # One stable ID per browser session. Every chunk this user uploads gets
+    # tagged with it, so their retrieval/delete never touches anyone else's data.
+    st.session_state.session_id = str(uuid.uuid4())
+
+SESSION_ID = st.session_state.session_id
 
 
 def sync_library_from_store():
-    """Rebuild the sidebar's file list from what's actually stored in Chroma,
-    so the UI never lies about what's really searchable (fixes the stale-shelf
-    bug that happens if the DB folder is ever deleted/changed outside the app)."""
+    """Rebuild the sidebar's file list from what's actually stored in Chroma
+    for THIS session only, so the UI never lies about what's really
+    searchable, and never shows another user's files."""
     try:
-        raw = vectorstore.get(include=["metadatas"])
+        raw = vectorstore.get(
+            where={"session_id": SESSION_ID},
+            include=["metadatas"],
+        )
         sources = {
             m.get("source")
             for m in (raw.get("metadatas") or [])
@@ -228,11 +241,18 @@ def sync_library_from_store():
 
 
 def remove_book(file_name: str):
-    """Delete every chunk belonging to `file_name` from Chroma, then drop it
-    from the sidebar list. This removes its embeddings entirely — the model
-    can no longer retrieve anything from that file afterward."""
+    """Delete every chunk belonging to `file_name` FROM THIS SESSION ONLY.
+    The session_id filter guarantees this can never delete another user's
+    embeddings, even if two people upload files with the same name."""
     try:
-        vectorstore.delete(where={"source": file_name})
+        vectorstore.delete(
+            where={
+                "$and": [
+                    {"source": file_name},
+                    {"session_id": SESSION_ID},
+                ]
+            }
+        )
     except Exception as e:
         st.error(f"Couldn't remove '{file_name}' from the vector store: {e}")
         return
@@ -281,7 +301,11 @@ with st.sidebar:
                     chunks = splitter.split_text(raw_text)
                     if chunks:
                         vectorstore.add_texts(
-                            chunks, metadatas=[{"source": f.name}] * len(chunks)
+                            chunks,
+                            metadatas=[
+                                {"source": f.name, "session_id": SESSION_ID}
+                            ]
+                            * len(chunks),
                         )
                         st.session_state.library.append(f.name)
             st.success(f"Added {len(new_files)} file(s) to the library.")
@@ -371,7 +395,12 @@ if query:
 
         retriever = vectorstore.as_retriever(
             search_type="mmr",
-            search_kwargs={"k": 4, "fetch_k": 10, "lambda_mult": 0.5},
+            search_kwargs={
+                "k": 4,
+                "fetch_k": 10,
+                "lambda_mult": 0.5,
+                "filter": {"session_id": SESSION_ID},
+            },
         )
 
         with chat_container:
